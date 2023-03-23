@@ -6,7 +6,11 @@ import (
 	bz "github.com/dsnet/compress/bzip2"
 )
 
-func Bzip2Compress(data []byte) ([]byte, error) {
-	io_writer := io.Writer()
-	bz.NewWriter(nil)
+func GetEncryptedContent(r *bz.Reader) ([]byte, error) {
+	return io.ReadAll(r)
+}
+
+func CompressEncryptedContent(w *bz.Writer, data []byte) error {
+	_, err := w.Write(data)
+	return err
 }

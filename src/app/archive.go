@@ -34,3 +34,8 @@ func (ar *PWMan_Archive) GetPhysicalArchivePath() (string, error) {
 		return exec_path + "/" + archive_name, nil
 	}
 }
+
+func (this_app *PWMan_App) CreateHeader() *PWMan_App {
+	this_app.AddToArchive([]string{"PWMAN_ARCHIVE", "0.0.1"})
+	return this_app
+}

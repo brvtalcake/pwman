@@ -13,3 +13,6 @@
 
 
 Makefile
+*test*
+*text*
+bin/pwman_archive.bz2

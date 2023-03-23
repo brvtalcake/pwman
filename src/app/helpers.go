@@ -1,21 +1,9 @@
 package app
 
-import "log"
-
-func (this_app *PWMan_App) VerifyKey(opt_key ...string) bool {
-	if len(opt_key) == 0 {
-		return this_app.VerifyKey(this_app.Key)
-	}
-	if len(opt_key) == 1 {
-		for _, ch := range opt_key[0] {
-			if (ch < 48 || ch > 57) && ch != 0 && ch != 10 {
-				return false
-			}
-		}
-		return true
-	}
-	return false
-}
+import (
+	"log"
+	"unicode"
+)
 
 func Check(e error) {
 	if e != nil {
@@ -24,7 +12,21 @@ func Check(e error) {
 }
 
 func (this_app *PWMan_App) ClearAppResources() {
-	this_app.Archive = nil
-	this_app.App = nil
+	if this_app.Archive.BZ2_Reader != nil {
+		this_app.Archive.BZ2_Reader.Close()
+	}
+	if this_app.Archive.BZ2_Writer != nil {
+		this_app.Archive.BZ2_Writer.Close()
+	}
+	if this_app.Archive.IO_Reader != nil {
+		this_app.Archive.IO_Reader.Close()
+	}
+	if this_app.Archive.IO_Writer != nil {
+		this_app.Archive.IO_Writer.Close()
+	}
 	// TODO: Clear other resources
+}
+
+func IsValidEntryChar(char rune) bool {
+	return !unicode.IsControl(char)
 }
