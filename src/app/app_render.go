@@ -2,10 +2,8 @@ package app
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
-	"pwman/src/encryption"
 
 	bz "github.com/dsnet/compress/bzip2"
 	"github.com/gdamore/tcell/v2"
@@ -32,7 +30,8 @@ type PWMan_App struct {
 	Previous_key_false bool
 	Quit               bool
 	IsOnPSWDList       bool
-	IsOnPSWDPage       bool
+	IsOnPSWDPopUp      bool
+	IsOnGeneralActions bool
 	Archive            *PWMan_Archive
 }
 
@@ -40,7 +39,8 @@ func (this_app *PWMan_App) Init() *PWMan_App {
 	var err error
 	this_app.App = tview.NewApplication()
 	this_app.IsOnPSWDList = false
-	this_app.IsOnPSWDPage = false
+	this_app.IsOnPSWDPopUp = false
+	this_app.IsOnGeneralActions = false
 	this_app.Archive = new(PWMan_Archive)
 	this_app.Archive.DecryptedContent = ""
 	this_app.Archive.EncryptedContent = nil
@@ -184,243 +184,142 @@ func (this_app *PWMan_App) RunPswdList() {
 	entries := this_app.ParseArchive()
 	this_app.IsOnPSWDList = true
 
-	// create a slice of boxes for each entry
-	var pswd_boxes []*tview.Box = nil
+	// create a slice of grids for each entry
+	var pages *tview.Pages = tview.NewPages()
 
 	this_app.App = tview.NewApplication()
-	list := tview.NewList().AddItem("General actions", "Press a to add or delete a new entry", 'a', nil)
-	pswd_boxes = append(pswd_boxes, tview.NewBox().SetBorder(true).SetTitle("General actions").SetTitleAlign(tview.AlignCenter))
+	list := tview.NewList()
+	pages.AddPage(" Password List ", list, true, true)
+
+	var pswd_modals []*tview.Modal
+	// var pswd_ok_buttons []*tview.Button
+
+	action_forms := map[string]*tview.Form{"add_entry": nil, "change_key": nil, "change_entry": nil}
+	action_forms["add_entry"] = tview.NewForm().
+		AddInputField("Entry name :", "", 35, nil, nil).
+		AddPasswordField("Entry password :", "", 35, '*', nil).
+		AddButton("Submit", func() {
+			if len(action_forms["add_entry"].GetFormItem(0).(*tview.InputField).GetText()) > 1 && len(action_forms["add_entry"].GetFormItem(1).(*tview.InputField).GetText()) > 1 {
+				this_app.AddToArchive([]string{action_forms["add_entry"].GetFormItem(0).(*tview.InputField).GetText(), action_forms["add_entry"].GetFormItem(1).(*tview.InputField).GetText()})
+			}
+			this_app.App.Stop() // stop the app to refresh the list. The main loop will restart it
+		})
+
 	if entries != nil {
-		var i rune = 'b'
-		for _, entry := range entries {
-			list.AddItem(entry[0], "Press enter to see the "+entry[0]+" associated password and the possible actions.", i, nil)
-			// create a box for each entry
-			pswd_boxes = append(pswd_boxes, tview.NewBox().SetBorder(true).SetTitle(entry[0]).SetTitleAlign(tview.AlignCenter))
+		var i rune = 'a'
+		for p, entry := range entries {
+			log.Println("Entries[", p, "] = ", entry, "\nPassword : ", entry[1])
+			list.AddItem(entry[0], "Press enter to see the "+entry[0]+" associated password.", i, nil) // the selected entry is handled by the function below
+			pswd_modals = append(pswd_modals, tview.NewModal().AddButtons([]string{"OK"}).SetDoneFunc(nil).SetText("Password : "+entry[1]))
+			pages.AddPage(fmt.Sprintf(" %d ", p), pswd_modals[p], true, false)
 			i++
 		}
+	} else {
+		list.AddItem("No entry found", "Press CTRL + A to add one.", 'a', nil)
 	}
 
-	pages := tview.NewPages().AddPage(" Password List ", list, true, true)
-
-	for i, box := range pswd_boxes {
-		pages.AddPage(fmt.Sprintf(" %d ", i), box, false, false)
-	}
-
-	custom_event_handler := func(input *tcell.EventKey) *tcell.EventKey {
-		if input.Key() == tcell.KeyEscape {
+	custom_key_event_handler := func(input *tcell.EventKey) *tcell.EventKey {
+		if input.Key() == tcell.KeyCtrlA {
+			this_app.IsOnPSWDList = false
+			pages.SwitchToPage(" Add Entry ")
+			return nil
+		} else if input.Key() == tcell.KeyEscape {
 			if this_app.IsOnPSWDList {
 				this_app.Quit = true
 				this_app.App.Stop()
 			} else {
 				this_app.IsOnPSWDList = true
-				this_app.App.SetRoot(pages, true)
+				pages.SwitchToPage(" Password List ")
+			}
+			return nil
+		} else if input.Key() == tcell.KeyCtrlC {
+			this_app.Quit = true
+			this_app.App.Stop()
+			this_app.ClearAppResources()
+			log.Println("SIGINT received, exiting...")
+			os.Exit(0)
+			return nil
+		} else if input.Key() == tcell.KeyCtrlD { // TODO: delete entry
+			/* if this_app.IsOnPSWDList {
+			this_app.IsOnPSWDList = false
+			selected := list.GetCurrentItem()
+			pages.AddPage(" Delete Entry ", tview.NewModal().AddButtons([]string{"Yes", "No"}).SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+				if buttonLabel == "Yes" {
+					this_app.DeleteFromArchive(entries['a'+selected][0])
+					this_app.App.Stop()
+					} else {
+						this_app.IsOnPSWDList = true
+						pages.SwitchToPage(" Password List ")
+						this_app.App.Stop()
+					}
+					pages.HidePage(" Delete Entry ")
+					this_app.App.Stop()
+					}).SetText("Are you sure you want to delete the "+entries[selected][0]+" entry ?").SetBorder(true).SetTitle(" Delete Entry ").SetTitleAlign(tview.AlignCenter), true, true)
+					pages.SwitchToPage(" Delete Entry ")
+					} */
+			return nil
+		} else if input.Key() == tcell.KeyCtrlK { // TODO: change key
+			// TO BE IMPLEMENTED
+			return nil
+		} else if input.Key() == tcell.KeyCtrlE { // TODO: change entry
+			// TO BE IMPLEMENTED
+			return nil
+		} else if input.Key() == tcell.KeyLeft && this_app.IsOnPSWDList {
+			list.SetCurrentItem(list.GetCurrentItem() - 10)
+			return nil
+		} else if input.Key() == tcell.KeyRight && this_app.IsOnPSWDList {
+			list.SetCurrentItem(list.GetCurrentItem() + 10)
+			return nil
+		} else if input.Key() == tcell.KeyEnter {
+			if this_app.IsOnPSWDList {
+				selected_item := list.GetCurrentItem()
+				pages.ShowPage(fmt.Sprintf(" %d ", selected_item))
+				this_app.IsOnPSWDList = false
+				this_app.IsOnPSWDPopUp = true
+				return nil
+			} else if this_app.IsOnPSWDPopUp {
+				this_app.IsOnPSWDPopUp = false
+				this_app.IsOnPSWDList = true
+				pages.HidePage(fmt.Sprintf(" %d ", list.GetCurrentItem()))
+			} else {
+				return input
 			}
 		}
 		return input
 	}
-	this_app.App.SetInputCapture(custom_event_handler)
+	this_app.App.SetInputCapture(custom_key_event_handler)
+	/* previously_selected := 0 */
+	custom_mouse_event_handler := func(event *tcell.EventMouse, mouse_action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
+		/* if this_app.IsOnPSWDList && mouse_action == tview.MouseLeftDoubleClick && previously_selected != list.GetCurrentItem() {
+			previously_selected = list.GetCurrentItem()
+			pages.ShowPage(fmt.Sprintf(" %d ", previously_selected))
+			this_app.IsOnPSWDList = false
+			this_app.IsOnPSWDPopUp = true
+			return nil, mouse_action
+		} */
+		if this_app.IsOnPSWDPopUp {
+			for p := range entries {
+				ok_button_x, ok_button_y, ok_button_w, ok_button_h := pswd_modals[p].GetInnerRect()
+				event_x, event_y := event.Position()
+				if (mouse_action == tview.MouseLeftClick || mouse_action == tview.MouseLeftDoubleClick) && event_x >= ok_button_x && event_x <= ok_button_x+ok_button_w && event_y >= ok_button_y && event_y <= ok_button_y+ok_button_h {
+					this_app.IsOnPSWDPopUp = false
+					this_app.IsOnPSWDList = true
+					pages.HidePage(fmt.Sprintf(" %d ", list.GetCurrentItem()))
+					return nil, mouse_action
+				}
+			}
+		} /* else if this_app.IsOnPSWDList {
+			for p, _ := range entries {
+			list_element_x, list_element_y, list_element_w, list_element_h := list.Get
+			// TO BE IMPLEMENTED
+		} */
+		return event, mouse_action
+	}
+	this_app.App.SetMouseCapture(custom_mouse_event_handler)
+
+	pages.AddPage(" Add Entry ", action_forms["add_entry"], true, false)
 
 	if err := this_app.App.SetRoot(pages, true).EnableMouse(true).Run(); err != nil {
 		panic(err)
-	}
-}
-
-func (this_app *PWMan_App) ParseArchive() [][]string {
-	var err error
-	returned_entries := make([][]string, 0)
-	// slurp the whole encrypted content and store it in archive struct
-	if this_app.Archive.BZ2_Writer != nil {
-		err = this_app.Archive.BZ2_Writer.Close()
-		if err != nil {
-			log.Panic(err.Error())
-			this_app.ClearAppResources()
-			os.Exit(1)
-		}
-	}
-	if this_app.Archive.BZ2_Reader == nil {
-		this_app.Archive.BZ2_Reader, err = bz.NewReader(this_app.Archive.IO_Reader, &bz.ReaderConfig{})
-		if err != nil {
-			log.Panic(err.Error())
-			this_app.ClearAppResources()
-			os.Exit(1)
-		}
-	} else if this_app.Archive.BZ2_Reader != nil { // close and reopen the reader to be sure
-		err = this_app.Archive.BZ2_Reader.Close()
-		if err != nil {
-			log.Panic(err.Error())
-			this_app.ClearAppResources()
-			os.Exit(1)
-		}
-		this_app.Archive.BZ2_Reader, err = bz.NewReader(this_app.Archive.IO_Reader, &bz.ReaderConfig{})
-		if err != nil {
-			log.Panic(err.Error())
-			this_app.ClearAppResources()
-			os.Exit(1)
-		}
-	}
-	this_app.Archive.BZ2_Reader.Reset(this_app.Archive.IO_Reader)
-	_, err = this_app.Archive.IO_Reader.Seek(0, io.SeekStart)
-	if err != nil {
-		log.Panic(err.Error())
-		this_app.ClearAppResources()
-		os.Exit(1)
-	}
-	this_app.Archive.EncryptedContent, err = io.ReadAll(this_app.Archive.BZ2_Reader) // maybe to change
-	if err != nil {
-		log.Panic(err.Error())
-		this_app.ClearAppResources()
-		os.Exit(1)
-	}
-	this_app.Archive.DecryptedContent, err = encryption.Decrypt(this_app.Archive.EncryptedContent, this_app.Byte_key)
-	if err != nil {
-		if err.Error() == "cipher: message authentication failed" {
-			log.Panic("Wrong key !")
-			log.Println("\n\x1b[34;1mError :\n\x1b[0m" + err.Error())
-			recover()
-		} else {
-			log.Panic(err.Error())
-			this_app.ClearAppResources()
-			os.Exit(1)
-		}
-	}
-
-	runed_decrypted_content := []rune(this_app.Archive.DecryptedContent)
-	runed_decrypted_content_len := len(runed_decrypted_content)
-	no_more_entries := false
-	global_cursor := uint64(0)
-	entry_count := uint64(0)
-
-	check_if_no_more_entries := func() bool {
-		return global_cursor >= uint64(runed_decrypted_content_len)-1
-	}
-	get_next_entry := func() []string {
-		next_entry := make([]string, 2)
-		no_more_entries = check_if_no_more_entries()
-		for !IsValidEntryChar(runed_decrypted_content[global_cursor]) && !no_more_entries {
-			global_cursor++
-			no_more_entries = check_if_no_more_entries()
-		}
-		for IsValidEntryChar(runed_decrypted_content[global_cursor]) && !no_more_entries {
-			next_entry[0] += string(runed_decrypted_content[global_cursor])
-			global_cursor++
-			no_more_entries = check_if_no_more_entries()
-		}
-		for !IsValidEntryChar(runed_decrypted_content[global_cursor]) && !no_more_entries {
-			global_cursor++
-			no_more_entries = check_if_no_more_entries()
-		}
-		for IsValidEntryChar(runed_decrypted_content[global_cursor]) && !no_more_entries {
-			next_entry[1] += string(runed_decrypted_content[global_cursor])
-			global_cursor++
-			no_more_entries = check_if_no_more_entries()
-		}
-		entry_count++
-		if entry_count > 1 { // skip the header
-			return next_entry
-		} else {
-			return nil
-		}
-
-	}
-
-	// split the decrypted content into entries
-	/*
-	* Each entries has the following format :
-	* 1.	Name of the entry (website, app, etc.)
-	* 2.	Associated password
-	* 3.	2 newlines
-	 */
-
-	for global_cursor < uint64(runed_decrypted_content_len) && !no_more_entries {
-		returned_entries = append(returned_entries, get_next_entry())
-	}
-	this_app.Archive.PswEntryCount = entry_count
-	err = this_app.Archive.BZ2_Reader.Close()
-	if err != nil {
-		log.Panic(err.Error())
-		this_app.ClearAppResources()
-		os.Exit(1)
-	}
-	if entry_count > 1 { // skip the header
-		return returned_entries
-	} else {
-		return nil
-	}
-}
-
-/* func (this_app *PWMan_App) ReshapeArchive() { */
-
-func (this_app *PWMan_App) AddToArchive(entry []string) {
-	var err error
-	if this_app.Archive.BZ2_Reader != nil {
-		err = this_app.Archive.BZ2_Reader.Close()
-		if err != nil {
-			log.Panic(err.Error())
-			this_app.ClearAppResources()
-			os.Exit(1)
-		}
-	}
-	if this_app.Archive.BZ2_Writer == nil {
-		err = os.Truncate(this_app.Archive.Location, 0)
-		if err != nil {
-			log.Panic(err.Error())
-			this_app.ClearAppResources()
-			os.Exit(1)
-		}
-		this_app.Archive.BZ2_Writer, err = bz.NewWriter(this_app.Archive.IO_Writer, &bz.WriterConfig{Level: bz.BestCompression})
-		if err != nil {
-			log.Panic(err.Error())
-			this_app.ClearAppResources()
-			os.Exit(1)
-		}
-	} else if this_app.Archive.BZ2_Writer != nil {
-		err = this_app.Archive.BZ2_Writer.Close()
-		if err != nil {
-			log.Panic(err.Error())
-			this_app.ClearAppResources()
-			os.Exit(1)
-		}
-		err = os.Truncate(this_app.Archive.Location, 0)
-		if err != nil {
-			log.Panic(err.Error())
-			this_app.ClearAppResources()
-			os.Exit(1)
-		}
-		this_app.Archive.BZ2_Writer, err = bz.NewWriter(this_app.Archive.IO_Writer, &bz.WriterConfig{Level: bz.BestCompression})
-		if err != nil {
-			log.Panic(err.Error())
-			this_app.ClearAppResources()
-			os.Exit(1)
-		}
-	}
-
-	this_app.Archive.BZ2_Writer.Reset(this_app.Archive.IO_Writer)
-	_, err = this_app.Archive.IO_Writer.Seek(0, io.SeekStart)
-	if err != nil {
-		log.Panic(err.Error())
-		this_app.ClearAppResources()
-		os.Exit(1)
-	}
-	var new_entry string = "\n" + entry[0] + "\n" + entry[1] + "\n"
-	this_app.Archive.DecryptedContent += new_entry
-	this_app.Archive.EncryptedContent, err = encryption.Encrypt([]byte(this_app.Archive.DecryptedContent), this_app.Byte_key)
-	if err != nil {
-		log.Panic(err.Error())
-		this_app.ClearAppResources()
-		os.Exit(1)
-	}
-
-	_, err = io.WriteString(this_app.Archive.BZ2_Writer, string(this_app.Archive.EncryptedContent))
-	if err != nil {
-		log.Panic(err.Error())
-		this_app.ClearAppResources()
-		os.Exit(1)
-	}
-	this_app.Archive.PswEntryCount++
-	err = this_app.Archive.BZ2_Writer.Close()
-	if err != nil {
-		log.Panic(err.Error())
-		this_app.ClearAppResources()
-		os.Exit(1)
 	}
 }
