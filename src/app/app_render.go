@@ -208,7 +208,6 @@ func (this_app *PWMan_App) RunPswdList() {
 	if entries != nil {
 		var i rune = 'a'
 		for p, entry := range entries {
-			log.Println("Entries[", p, "] = ", entry, "\nPassword : ", entry[1])
 			list.AddItem(entry[0], "Press enter to see the "+entry[0]+" associated password.", i, nil) // the selected entry is handled by the function below
 			pswd_modals = append(pswd_modals, tview.NewModal().AddButtons([]string{"OK"}).SetDoneFunc(nil).SetText("Password : "+entry[1]))
 			pages.AddPage(fmt.Sprintf(" %d ", p), pswd_modals[p], true, false)
