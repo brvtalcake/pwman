@@ -1,6 +1,6 @@
 # PWMan
 
-PWMan is a simple password manager in Go using [AES](https://pkg.go.dev/crypto/aes@go1.20.2) and [Cipher](https://pkg.go.dev/crypto/cipher@go1.20.2) for encryption (based on a key needed to start the app and wich is not stored anywhere, except in the memory during the execution), and [bzip2](https://github.com/dsnet/compress/tree/master/bzip2) for efficient and lossless compression.
+PWMan is a simple password manager in Go using [AES](https://pkg.go.dev/crypto/aes@go1.20.2) and [Cipher](https://pkg.go.dev/crypto/cipher@go1.20.2) Golang packages for encryption (based on a key needed to start the app and wich is not stored anywhere, except in the memory during the execution), and [bzip2](https://github.com/dsnet/compress/tree/master/bzip2) for efficient and lossless compression.
 
 It implements an "in-terminal" interface, built on top of the [tview library](https://github.com/rivo/tview).
 
