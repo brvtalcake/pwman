@@ -217,6 +217,30 @@ func (this_app *PWMan_App) RunPswdList() {
 		list.AddItem("No entry found", "Press CTRL + A to add one.", 'a', nil)
 	}
 
+	var delete_pswd_popup_text string
+	if entries == nil {
+		delete_pswd_popup_text = "Are you sure you want to delete this entry ?"
+	} else {
+		delete_pswd_popup_text = "Are you sure you want to delete " + entries[list.GetCurrentItem()][0] + " ?"
+	}
+
+	delete_pswd_popup := tview.NewModal().AddButtons([]string{"Yes", "No"}).SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+		if buttonLabel == "Yes" {
+			if !this_app.DeleteFromArchive(entries[list.GetCurrentItem()][0]) {
+				log.Println("Could not delete entry")
+			}
+			this_app.App.Stop()
+		} else {
+			this_app.IsOnPSWDList = true
+			pages.SwitchToPage(" Password List ")
+			this_app.App.Stop()
+		}
+		pages.HidePage(" Delete Entry ")
+		this_app.App.Stop()
+	}).SetText(delete_pswd_popup_text)
+
+	pages.AddPage(" Delete Entry ", delete_pswd_popup, true, false)
+
 	custom_key_event_handler := func(input *tcell.EventKey) *tcell.EventKey {
 		if input.Key() == tcell.KeyCtrlA {
 			this_app.IsOnPSWDList = false
@@ -238,25 +262,15 @@ func (this_app *PWMan_App) RunPswdList() {
 			log.Println("SIGINT received, exiting...")
 			os.Exit(0)
 			return nil
-		} else if input.Key() == tcell.KeyCtrlD { // TODO: delete entry
-			/* if this_app.IsOnPSWDList {
-			this_app.IsOnPSWDList = false
-			selected := list.GetCurrentItem()
-			pages.AddPage(" Delete Entry ", tview.NewModal().AddButtons([]string{"Yes", "No"}).SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-				if buttonLabel == "Yes" {
-					this_app.DeleteFromArchive(entries['a'+selected][0])
-					this_app.App.Stop()
-					} else {
-						this_app.IsOnPSWDList = true
-						pages.SwitchToPage(" Password List ")
-						this_app.App.Stop()
-					}
-					pages.HidePage(" Delete Entry ")
-					this_app.App.Stop()
-					}).SetText("Are you sure you want to delete the "+entries[selected][0]+" entry ?").SetBorder(true).SetTitle(" Delete Entry ").SetTitleAlign(tview.AlignCenter), true, true)
-					pages.SwitchToPage(" Delete Entry ")
-					} */
-			return nil
+		} else if input.Key() == tcell.KeyCtrlD {
+			if entries != nil {
+				this_app.IsOnPSWDList = false
+				pages.ShowPage(" Delete Entry ")
+				this_app.IsOnPSWDList = false
+				return nil
+			} else {
+				return input
+			}
 		} else if input.Key() == tcell.KeyCtrlK { // TODO: change key
 			// TO BE IMPLEMENTED
 			return nil
